@@ -204,6 +204,25 @@ class AppsResource @Inject() (
     }
   }
 
+  @POST
+  @Path("{id:.+}/checkpoint")
+  def checkpoint(@PathParam("id") id: String,
+              @DefaultValue("false")@QueryParam("force") force: Boolean,
+              @Context req: HttpServletRequest,
+              @Context resp: HttpServletResponse): Response = {
+    val appId = id.toRootPath
+    doIfAuthorized(req, resp, UpdateAppOrGroup, appId) { identity =>
+      def markForCheckpointingOrThrow(opt: Option[AppDefinition]) = opt
+        .map(_.markedForRestarting)
+        .getOrElse(throw new UnknownAppException(appId))
+
+      val newVersion = clock.now()
+      val restartDeployment = result(groupManager.updateApp(id.toRootPath, markForCheckpointingOrThrow, newVersion, force))
+
+      deploymentResult(restartDeployment)
+    }
+  }
+
   private def updateOrCreate(appId: PathId,
                              existing: Option[AppDefinition],
                              appUpdate: V2AppUpdate,
